@@ -516,6 +516,8 @@ int __init efi_config_parse_tables(void *config_tables, int count, int sz,
 		early_memunmap(tbl, sizeof(*tbl));
 	}
 
+	efi_memattr_init();
+
 	return 0;
 }
 
