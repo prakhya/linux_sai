@@ -980,6 +980,14 @@ extern void efi_mem_reserve(phys_addr_t addr, u64 size);
 extern void efi_initialize_iomem_resources(struct resource *code_resource,
 		struct resource *data_resource, struct resource *bss_resource);
 extern void efi_reserve_boot_services(void);
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+extern int efi_boot_services_fixup(unsigned long phys_addr);
+#else
+static inline int efi_boot_services_fixup(unsigned long phys_addr)
+{
+		return 0;
+}
+#endif
 extern int efi_get_fdt_params(struct efi_fdt_params *params);
 extern struct kobject *efi_kobj;
 
