@@ -137,6 +137,7 @@ int __init efi_alloc_page_tables(void)
 	pgd_t *pgd;
 	pud_t *pud;
 	gfp_t gfp_mask;
+	unsigned num_pgds;
 
 	if (efi_enabled(EFI_OLD_MEMMAP))
 		return 0;
@@ -155,6 +156,13 @@ int __init efi_alloc_page_tables(void)
 	}
 
 	pgd_populate(NULL, pgd, pud);
+
+	/*
+	 * Sync 1:1 mappings to support buggy firmware which haven't updated
+	 * their addresses even after kernel has booted.
+	 */
+	num_pgds = pgd_index(VMALLOC_START) - pgd_index(PAGE_OFFSET);
+	memcpy(efi_pgd, pgd_offset_k(PAGE_OFFSET), sizeof(pgd_t) * num_pgds);
 
 	return 0;
 }
