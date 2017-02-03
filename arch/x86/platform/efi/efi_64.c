@@ -124,7 +124,7 @@ void __init efi_call_phys_epilog(pgd_t *save_pgd)
 	early_code_mapping_set_exec(0);
 }
 
-static pgd_t *efi_pgd;
+//static pgd_t *efi_pgd;
 
 /*
  * We need our own copy of the higher levels of the page tables
@@ -134,7 +134,7 @@ static pgd_t *efi_pgd;
  */
 int __init efi_alloc_page_tables(void)
 {
-	pgd_t *pgd;
+	pgd_t *pgd, *efi_pgd;
 	pud_t *pud;
 	gfp_t gfp_mask;
 	unsigned num_pgds;
@@ -164,6 +164,8 @@ int __init efi_alloc_page_tables(void)
 	num_pgds = pgd_index(VMALLOC_START) - pgd_index(PAGE_OFFSET);
 	memcpy(efi_pgd, pgd_offset_k(PAGE_OFFSET), sizeof(pgd_t) * num_pgds);
 
+	efi_mm.pgd = efi_pgd;
+
 	return 0;
 }
 
@@ -175,6 +177,7 @@ void efi_sync_low_kernel_mappings(void)
 	unsigned num_entries;
 	pgd_t *pgd_k, *pgd_efi;
 	pud_t *pud_k, *pud_efi;
+	pgd_t *efi_pgd = efi_mm.pgd;
 
 	if (efi_enabled(EFI_OLD_MEMMAP))
 		return;
@@ -255,6 +258,7 @@ int __init efi_setup_page_tables(unsigned long pa_memmap, unsigned num_pages)
 	struct page *page;
 	unsigned npages;
 	pgd_t *pgd;
+	pgd_t *efi_pgd = efi_mm.pgd;
 
 	if (efi_enabled(EFI_OLD_MEMMAP))
 		return 0;
@@ -312,7 +316,7 @@ static void __init __map_region(efi_memory_desc_t *md, u64 va)
 {
 	unsigned long flags = _PAGE_RW;
 	unsigned long pfn;
-	pgd_t *pgd = efi_pgd;
+	pgd_t *pgd = efi_mm.pgd;
 
 	if (!(md->attribute & EFI_MEMORY_WB))
 		flags |= _PAGE_PCD;
@@ -424,8 +428,8 @@ void __init parse_efi_setup(u64 phys_addr, u32 data_len)
 void __init efi_runtime_update_mappings(void)
 {
 	unsigned long pfn;
-	pgd_t *pgd = efi_pgd;
 	efi_memory_desc_t *md;
+	pgd_t *pgd = efi_mm.pgd;
 
 	if (efi_enabled(EFI_OLD_MEMMAP)) {
 		if (__supported_pte_mask & _PAGE_NX)
@@ -468,7 +472,7 @@ void __init efi_runtime_update_mappings(void)
 void __init efi_dump_pagetable(void)
 {
 #ifdef CONFIG_EFI_PGT_DUMP
-	ptdump_walk_pgd_level(NULL, efi_pgd);
+	ptdump_walk_pgd_level(NULL, efi_mm.pgd);
 #endif
 }
 
