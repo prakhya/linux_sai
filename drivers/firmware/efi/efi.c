@@ -358,7 +358,11 @@ subsys_initcall(efisubsys_init);
  * and if so, populate the supplied memory descriptor with the appropriate
  * data.
  */
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+int efi_mem_desc_lookup(u64 phys_addr, efi_memory_desc_t *out_md)
+#else
 int __init efi_mem_desc_lookup(u64 phys_addr, efi_memory_desc_t *out_md)
+#endif
 {
 	efi_memory_desc_t *md;
 

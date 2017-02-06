@@ -599,7 +599,11 @@ void __init runtime_code_page_mkexec(void)
 	}
 }
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+void efi_memory_uc(u64 addr, unsigned long size)
+#else
 void __init efi_memory_uc(u64 addr, unsigned long size)
+#endif
 {
 	unsigned long page_shift = 1UL << EFI_PAGE_SHIFT;
 	u64 npages;
@@ -609,7 +613,11 @@ void __init efi_memory_uc(u64 addr, unsigned long size)
 	set_memory_uc(addr, npages);
 }
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+void old_map_region(efi_memory_desc_t *md)
+#else
 void __init old_map_region(efi_memory_desc_t *md)
+#endif
 {
 	u64 start_pfn, end_pfn, end;
 	unsigned long size;

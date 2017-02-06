@@ -296,7 +296,11 @@ int __init efi_setup_page_tables(unsigned long pa_memmap, unsigned num_pages)
 	return 0;
 }
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+static void __map_region(efi_memory_desc_t *md, u64 va)
+#else
 static void __init __map_region(efi_memory_desc_t *md, u64 va)
+#endif
 {
 	unsigned long flags = _PAGE_RW;
 	unsigned long pfn;
@@ -311,7 +315,11 @@ static void __init __map_region(efi_memory_desc_t *md, u64 va)
 			   md->phys_addr, va);
 }
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+void efi_map_region(efi_memory_desc_t *md)
+#else
 void __init efi_map_region(efi_memory_desc_t *md)
+#endif
 {
 	unsigned long size = md->num_pages << PAGE_SHIFT;
 	u64 pa = md->phys_addr;
@@ -373,8 +381,13 @@ void __init efi_map_region_fixed(efi_memory_desc_t *md)
 	__map_region(md, md->virt_addr);
 }
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+void __iomem *efi_ioremap(unsigned long phys_addr, unsigned long size,
+				 u32 type, u64 attribute)
+#else
 void __iomem *__init efi_ioremap(unsigned long phys_addr, unsigned long size,
 				 u32 type, u64 attribute)
+#endif
 {
 	unsigned long last_map_pfn;
 

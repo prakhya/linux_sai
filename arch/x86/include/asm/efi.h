@@ -94,8 +94,13 @@ struct efi_scratch {
 	preempt_enable();						\
 })
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+extern void __iomem *efi_ioremap(unsigned long addr, unsigned long size,
+					u32 type, u64 attribute);
+#else
 extern void __iomem *__init efi_ioremap(unsigned long addr, unsigned long size,
 					u32 type, u64 attribute);
+#endif
 
 #ifdef CONFIG_KASAN
 /*
@@ -117,13 +122,19 @@ extern int __init efi_memblock_x86_reserve_range(void);
 extern pgd_t * __init efi_call_phys_prolog(void);
 extern void __init efi_call_phys_epilog(pgd_t *save_pgd);
 extern void __init efi_print_memmap(void);
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+extern void efi_memory_uc(u64 addr, unsigned long size);
+extern void efi_map_region(efi_memory_desc_t *md);
+extern void old_map_region(efi_memory_desc_t *md);
+#else
 extern void __init efi_memory_uc(u64 addr, unsigned long size);
 extern void __init efi_map_region(efi_memory_desc_t *md);
+extern void __init old_map_region(efi_memory_desc_t *md);
+#endif
 extern void __init efi_map_region_fixed(efi_memory_desc_t *md);
 extern void efi_sync_low_kernel_mappings(void);
 extern int __init efi_alloc_page_tables(void);
 extern int __init efi_setup_page_tables(unsigned long pa_memmap, unsigned num_pages);
-extern void __init old_map_region(efi_memory_desc_t *md);
 extern void __init runtime_code_page_mkexec(void);
 extern void __init efi_runtime_update_mappings(void);
 extern void __init efi_dump_pagetable(void);

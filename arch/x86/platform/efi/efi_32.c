@@ -50,7 +50,11 @@ int __init efi_setup_page_tables(unsigned long pa_memmap, unsigned num_pages)
 	return 0;
 }
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+void efi_map_region(efi_memory_desc_t *md)
+#else
 void __init efi_map_region(efi_memory_desc_t *md)
+#endif
 {
 	old_map_region(md);
 }
