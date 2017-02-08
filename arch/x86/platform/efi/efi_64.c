@@ -32,6 +32,7 @@
 #include <linux/reboot.h>
 #include <linux/slab.h>
 #include <linux/ucs2_string.h>
+#include <linux/mmu_context.h>
 
 #include <asm/setup.h>
 #include <asm/page.h>
@@ -523,24 +524,25 @@ efi_status_t efi_thunk_set_virtual_address_map(
 	efi_memory_desc_t *virtual_map)
 {
 	efi_status_t status;
-	unsigned long flags;
+//	unsigned long flags;
 	u32 func;
 
 	efi_sync_low_kernel_mappings();
-	local_irq_save(flags);
+	use_mm(&efi_mm);
+//	local_irq_save(flags);
 
-	efi_scratch.prev_cr3 = read_cr3();
-	write_cr3((unsigned long)efi_scratch.efi_pgt);
-	__flush_tlb_all();
+//	efi_scratch.prev_cr3 = read_cr3();
+//	write_cr3((unsigned long)efi_scratch.efi_pgt);
+//	__flush_tlb_all();
 
 	func = (u32)(unsigned long)phys_set_virtual_address_map;
 	status = efi64_thunk(func, memory_map_size, descriptor_size,
 			     descriptor_version, virtual_map);
 
-	write_cr3(efi_scratch.prev_cr3);
-	__flush_tlb_all();
-	local_irq_restore(flags);
-
+//	write_cr3(efi_scratch.prev_cr3);
+//	__flush_tlb_all();
+//	local_irq_restore(flags);
+	unuse_mm(&efi_mm);
 	return status;
 }
 

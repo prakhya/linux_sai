@@ -44,6 +44,7 @@
 #include <linux/io.h>
 #include <linux/reboot.h>
 #include <linux/bcd.h>
+#include <linux/mmu_context.h>
 
 #include <asm/setup.h>
 #include <asm/efi.h>
@@ -81,20 +82,20 @@ static efi_status_t __init phys_efi_set_virtual_address_map(
 	efi_memory_desc_t *virtual_map)
 {
 	efi_status_t status;
-	unsigned long flags;
-	pgd_t *save_pgd;
-
-	save_pgd = efi_call_phys_prolog();
+//	unsigned long flags;
+//	pgd_t *save_pgd;
+	use_mm(&efi_mm);
+	//save_pgd = efi_call_phys_prolog();
 
 	/* Disable interrupts around EFI calls: */
-	local_irq_save(flags);
+	//local_irq_save(flags);
 	status = efi_call_phys(efi_phys.set_virtual_address_map,
 			       memory_map_size, descriptor_size,
 			       descriptor_version, virtual_map);
-	local_irq_restore(flags);
+	//local_irq_restore(flags);
 
-	efi_call_phys_epilog(save_pgd);
-
+	//efi_call_phys_epilog(save_pgd);
+	unuse_mm(&efi_mm);
 	return status;
 }
 
