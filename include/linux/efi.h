@@ -1022,6 +1022,15 @@ extern int efi_memattr_apply_permissions(struct mm_struct *mm,
 	for_each_efi_memory_desc_in_map(&efi.memmap, md)
 
 /*
+ * __init_fixup - remove __init modifier to support CONFIG_EFI_BOOT_SERVICES_WARN
+ */
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+#define __init_fixup
+#else
+#define __init_fixup __init
+#endif
+
+/*
  * Format an EFI memory descriptor's type and attributes to a user-provided
  * character buffer, as per snprintf(), and return the buffer.
  */
