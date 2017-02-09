@@ -55,6 +55,7 @@
 
 static struct efi efi_phys __initdata;
 static efi_system_table_t efi_systab __initdata;
+static void *new_memmap __initdata = NULL;
 
 static efi_config_table_type_t arch_tables[] __initdata = {
 #ifdef CONFIG_X86_UV
@@ -555,7 +556,30 @@ void __init efi_init(void)
 
 void __init efi_late_init(void)
 {
+	int count = 0;
+	unsigned long pa;
+	efi_memory_desc_t *md;
+	pa = __pa(new_memmap);
+
+	for_each_efi_memory_desc(md) {
+
+		if (md->attribute & EFI_MEMORY_RUNTIME)
+			count++;
+	}
+
 	efi_bgrt_init();
+
+	/*
+	 * Unregister the early EFI memmap from efi_init() and install
+	 * the new EFI memory map.
+	 */
+	efi_memmap_unmap();
+
+	if (efi_memmap_init_late(pa, efi.memmap.desc_size * count)) {
+		pr_err("Failed to remap late EFI memory map\n");
+		clear_bit(EFI_RUNTIME_SERVICES, &efi.flags);
+		return;
+	}
 }
 
 void __init efi_set_executable(efi_memory_desc_t *md, bool executable)
@@ -936,7 +960,6 @@ static void __init kexec_enter_virtual_mode(void)
 static void __init __efi_enter_virtual_mode(void)
 {
 	int count = 0, pg_shift = 0;
-	void *new_memmap = NULL;
 	efi_status_t status;
 	unsigned long pa;
 
@@ -959,19 +982,6 @@ static void __init __efi_enter_virtual_mode(void)
 	print_memmap();
 
 	pa = __pa(new_memmap);
-
-	/*
-	 * Unregister the early EFI memmap from efi_init() and install
-	 * the new EFI memory map that we are about to pass to the
-	 * firmware via SetVirtualAddressMap().
-	 */
-	efi_memmap_unmap();
-
-	if (efi_memmap_init_late(pa, efi.memmap.desc_size * count)) {
-		pr_err("Failed to remap late EFI memory map\n");
-		clear_bit(EFI_RUNTIME_SERVICES, &efi.flags);
-		return;
-	}
 
 	BUG_ON(!efi.systab);
 
