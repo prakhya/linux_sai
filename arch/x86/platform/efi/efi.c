@@ -1073,3 +1073,35 @@ static int __init arch_parse_efi_cmdline(char *str)
 	return 0;
 }
 early_param("efi", arch_parse_efi_cmdline);
+
+__weak DEFINE_SPINLOCK(sai_lock);
+static DEFINE_SPINLOCK(efi_sai_lock);
+
+void __init virt_efi_sai_func(void)
+{
+	unsigned long flags, flags1;
+	unsigned long *addr_pa = (unsigned long *)0x7bfbe000;
+	unsigned long *addr_va = (unsigned long *)0xfffffffefe3be000;
+
+	spin_lock_irqsave(&sai_lock, flags1);
+	spin_lock(&efi_sai_lock);
+
+	efi_sync_low_kernel_mappings();
+	local_irq_save(flags);
+
+	efi_scratch.prev_cr3 = read_cr3();
+	write_cr3((unsigned long)efi_scratch.efi_pgt);
+	__flush_tlb_all();
+
+	*addr_pa = 1;
+	*addr_va = 1;
+
+	write_cr3(efi_scratch.prev_cr3);
+	__flush_tlb_all();
+	local_irq_restore(flags);
+
+	spin_unlock(&efi_sai_lock);
+	spin_unlock_irqrestore(&sai_lock, flags1);
+
+	return;
+}
