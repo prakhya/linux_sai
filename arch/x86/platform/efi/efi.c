@@ -56,6 +56,8 @@
 static struct efi efi_phys __initdata;
 static efi_system_table_t efi_systab __initdata;
 static void *new_memmap __initdata = NULL;
+phys_addr_t orig_new_phys;
+int orig_num_entries = 0;
 
 static efi_config_table_type_t arch_tables[] __initdata = {
 #ifdef CONFIG_X86_UV
@@ -74,7 +76,7 @@ static int __init setup_add_efi_memmap(char *arg)
 }
 early_param("add_efi_memmap", setup_add_efi_memmap);
 
-static void __init print_memmap(void)
+static void print_memmap(void)
 {
 	efi_memory_desc_t *md;
 	int i=0;
@@ -83,6 +85,46 @@ static void __init print_memmap(void)
 		pr_err("MD%d= Type: %x\tPhys_addr: 0x%llx\tVirt_addr: 0x%llx\tPages: %lld\tAttribute: 0x%llx\n", i, md->type, md->phys_addr, md->virt_addr, md->num_pages, md->attribute);
 		i++;
 	}
+}
+
+static void save_orig_memmap_forever(void)
+{
+	phys_addr_t new_phys, new_size;
+	efi_memory_desc_t *md;
+	int num_entries = 0;
+	void *new, *new_md;
+
+	for_each_efi_memory_desc(md) {
+		num_entries++;
+	}
+
+	new_size = efi.memmap.desc_size * num_entries;
+	new_phys = efi_memmap_alloc(num_entries);
+	if (!new_phys) {
+		pr_err("Failed to allocate new EFI memmap\n");
+		return;
+	}
+
+	new = memremap(new_phys, new_size, MEMREMAP_WB);
+	if (!new) {
+		pr_err("Failed to map new EFI memmap\n");
+		return;
+	}
+
+	/*
+	 * Build a new EFI memmap that has *all* entries of original memory
+	 * map, because we need these entries to dynamically fixup page
+	 * faults caused by illegal accesses from firmware.
+	 */
+	new_md = new;
+	for_each_efi_memory_desc(md) {
+		memcpy(new_md, md, efi.memmap.desc_size);
+		new_md += efi.memmap.desc_size;
+	}
+
+	memunmap(new);
+	orig_new_phys = new_phys;
+	orig_num_entries = num_entries;
 }
 
 static efi_status_t __init phys_efi_set_virtual_address_map(
@@ -984,6 +1026,7 @@ static void __init __efi_enter_virtual_mode(void)
 	}
 
 	print_memmap();
+	save_orig_memmap_forever();
 
 	pa = __pa(new_memmap);
 
@@ -1091,11 +1134,17 @@ early_param("efi", arch_parse_efi_cmdline);
 __weak DEFINE_SPINLOCK(sai_lock);
 static DEFINE_SPINLOCK(efi_sai_lock);
 
+/*
+ * We should not be having any illegal access corresponding to virtual
+ * addresses because, VA re given only to run time services and hence
+ * firmware cannot access a VA which is not given to it (illegal virtual
+ * addresses are unkown to firmware, hence will not trigger these
+ * illegal addresses).
+ */
 void __init virt_efi_sai_func(void)
 {
 	unsigned long flags, flags1;
 	unsigned long *addr_pa = (unsigned long *)0x7bfbe000;
-	unsigned long *addr_va = (unsigned long *)0xfffffffefe3be000;
 
 	spin_lock_irqsave(&sai_lock, flags1);
 	spin_lock(&efi_sai_lock);
@@ -1108,7 +1157,6 @@ void __init virt_efi_sai_func(void)
 	__flush_tlb_all();
 
 	*addr_pa = 1;
-	*addr_va = 1;
 
 	write_cr3(efi_scratch.prev_cr3);
 	__flush_tlb_all();
@@ -1120,11 +1168,42 @@ void __init virt_efi_sai_func(void)
 	return;
 }
 
+void install_orig_memmap(void)
+{
+	if (efi_memmap_install(orig_new_phys, orig_num_entries)) {
+		pr_err("Could not install new original EFI memmap\n");
+		return;
+	}
+}
+
+void uninstall_orig_memmap(phys_addr_t addr, unsigned int nr_map)
+{
+	if (efi_memmap_install(addr, nr_map)) {
+		pr_err("Could not install old EFI memmap\n");
+		return;
+	}
+}
+
 #ifdef CONFIG_EFI_BOOT_SERVICES_WARN
 int efi_boot_services_fixup(unsigned long phys_addr)
 {
-	int ret;
+	int ret, num_entries;
 	efi_memory_desc_t md;
+	efi_memory_desc_t *md1;
+	phys_addr_t old_memmap_phys;
+	num_entries = 0;
+
+	/* save already existing memory map */
+	old_memmap_phys = efi.memmap.phys_map;
+	for_each_efi_memory_desc(md1) {
+		num_entries++;
+	}
+
+	print_memmap();
+
+	install_orig_memmap();
+
+	print_memmap();
 
 	ret = efi_mem_desc_lookup(phys_addr, &md);
 
@@ -1142,6 +1221,7 @@ int efi_boot_services_fixup(unsigned long phys_addr)
 		pr_warn(FW_BUG "Fixing illegal access to BOOT_SERVICES_* at PA: "
 			"0x%lx\n", phys_addr);
 		efi_map_region(&md);
+		uninstall_orig_memmap(old_memmap_phys, num_entries);
 		return 1;
 	}
 	return 0;
