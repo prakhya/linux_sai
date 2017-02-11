@@ -1113,3 +1113,31 @@ void virt_efi_sai_func(void)
 
 	return;
 }
+
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+int efi_boot_services_fixup(unsigned long phys_addr)
+{
+	int ret;
+	efi_memory_desc_t md;
+
+	ret = efi_mem_desc_lookup(phys_addr, &md);
+
+	if (ret)
+		return 0;
+
+	if (md.type == EFI_BOOT_SERVICES_CODE ||
+	    md.type == EFI_BOOT_SERVICES_DATA)	{
+		/*
+		 * If the page fault was caused by an acccess to BOOT_SERVICES_*
+		 * memory regions, just map the region... and warn about it.
+		 * By now we should have found the virtual address of the system
+		 * table. Thus, no need to update.
+		 */
+		pr_warn(FW_BUG "Fixing illegal access to BOOT_SERVICES_* at PA: "
+			"0x%lx\n", phys_addr);
+		efi_map_region(&md);
+		return 1;
+	}
+	return 0;
+}
+#endif
