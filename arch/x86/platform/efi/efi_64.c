@@ -465,6 +465,40 @@ void __init efi_dump_pagetable(void)
 #endif
 }
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+int efi_boot_services_fixup(unsigned long virt_addr)
+{
+	pte_t* boot_service_pte;
+	unsigned int level;
+	unsigned long pfn;
+	unsigned long pf = _PAGE_RW;
+
+	pfn = virt_addr >> PAGE_SHIFT;
+	boot_service_pte = lookup_address_in_pgd(efi_pgd, virt_addr, &level);
+
+	if (!boot_service_pte)
+		return 0;
+
+	pr_err("pte_flags(*boot_service_pte): 0x%lx\n", pte_flags(*boot_service_pte));
+
+	if (pte_flags(*boot_service_pte) & _PAGE_SPECIAL) {
+		/*
+		 * If the page fault was caused by an acccess to BOOT_SERVICES_*
+		 * memory regions, just update the mapping of region... and warn
+		 * about it.
+		 */
+		pr_warn(FW_BUG "Fixing illegal access to BOOT_SERVICES_* at VA: "
+			"0x%lx\n", virt_addr);
+		if (kernel_map_pages_in_pgd(efi_pgd, pfn, virt_addr, 1, pf)) {
+			pr_warn("Error updating mapping for VA 0x%lx\n", virt_addr);
+			return 0;
+		}
+		return 1;
+	}
+	return 0;
+}
+#endif
+
 #ifdef CONFIG_EFI_MIXED
 extern efi_status_t efi64_thunk(u32, ...);
 
