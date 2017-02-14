@@ -321,6 +321,17 @@ static void __init __map_region(efi_memory_desc_t *md, u64 va)
 	if (!(md->attribute & EFI_MEMORY_WB))
 		flags |= _PAGE_PCD;
 
+	if (IS_ENABLED(CONFIG_EFI_BOOT_SERVICES_WARN)) {
+		if (md->type == EFI_BOOT_SERVICES_CODE ||
+			md->type == EFI_BOOT_SERVICES_DATA) {
+			pr_err("flags: 0x%lx", flags);
+			flags = _PAGE_PROTNONE;
+			flags |= _PAGE_NX;
+			flags |= _PAGE_SPECIAL;
+			pr_err("flags: 0x%lx", flags);
+		}
+	}
+
 	pfn = md->phys_addr >> PAGE_SHIFT;
 	if (kernel_map_pages_in_pgd(pgd, pfn, va, md->num_pages, flags))
 		pr_warn("Error mapping PA 0x%llx -> VA 0x%llx!\n",
