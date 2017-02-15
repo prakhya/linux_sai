@@ -562,6 +562,7 @@ typedef efi_status_t efi_query_variable_store_t(u32 attributes,
 						bool nonblocking);
 
 void efi_native_runtime_setup(void);
+extern void virt_efi_sai_func(void);
 
 /*
  * EFI Configuration Table and GUID definitions
