@@ -73,6 +73,17 @@ static int __init setup_add_efi_memmap(char *arg)
 }
 early_param("add_efi_memmap", setup_add_efi_memmap);
 
+static void print_memmap(void)
+{
+	efi_memory_desc_t *md;
+	int i=0;
+
+	for_each_efi_memory_desc(md) {
+		pr_err("MD%d= Type: %x\tPhys_addr: 0x%llx\tVirt_addr: 0x%llx\tPages: %lld\tAttribute: 0x%llx\n", i, md->type, md->phys_addr, md->virt_addr, md->num_pages, md->attribute);
+		i++;
+	}
+}
+
 static efi_status_t __init phys_efi_set_virtual_address_map(
 	unsigned long memory_map_size,
 	unsigned long descriptor_size,
@@ -944,6 +955,8 @@ static void __init __efi_enter_virtual_mode(void)
 		clear_bit(EFI_RUNTIME_SERVICES, &efi.flags);
 		return;
 	}
+
+	print_memmap();
 
 	pa = __pa(new_memmap);
 
