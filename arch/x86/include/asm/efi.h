@@ -140,6 +140,8 @@ struct efi_setup_data {
 };
 
 extern u64 efi_setup;
+extern phys_addr_t orig_new_phys;
+extern int orig_num_entries;
 
 #ifdef CONFIG_EFI
 
