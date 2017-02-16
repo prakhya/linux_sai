@@ -1161,9 +1161,63 @@ void virt_efi_sai_func(void)
 	return;
 }
 
+static int __efi_sai_memmap_init(struct efi_memory_map_data *data, bool late)
+{
+	struct efi_memory_map map;
+	phys_addr_t phys_map;
+
+	if (efi_enabled(EFI_PARAVIRT))
+		return 0;
+
+	phys_map = data->phys_map;
+
+	map.map = memremap(phys_map, data->size, MEMREMAP_WB);
+
+	if (!map.map) {
+		pr_err("Could not map the memory map!\n");
+		return -ENOMEM;
+	}
+
+	map.phys_map = data->phys_map;
+	map.nr_map = data->size / data->desc_size;
+	map.map_end = map.map + data->size;
+
+	map.desc_version = data->desc_version;
+	map.desc_size = data->desc_size;
+	map.late = late;
+
+	set_bit(EFI_MEMMAP, &efi.flags);
+
+	efi.memmap = map;
+
+	return 0;
+}
+
+static void __init efi_sai_memmap_unmap(void)
+{
+	memunmap(efi.memmap.map);
+
+	efi.memmap.map = NULL;
+	clear_bit(EFI_MEMMAP, &efi.flags);
+}
+
+static int efi_sai_memmap_install(phys_addr_t addr, unsigned int nr_map)
+{
+	struct efi_memory_map_data data;
+
+	efi_sai_memmap_unmap();
+
+	data.phys_map = addr;
+	data.size = efi.memmap.desc_size * nr_map;
+	data.desc_version = efi.memmap.desc_version;
+	data.desc_size = efi.memmap.desc_size;
+
+	return __efi_sai_memmap_init(&data, efi.memmap.late);
+}
+
 void install_orig_memmap(void)
 {
-	if (efi_memmap_install(orig_new_phys, orig_num_entries)) {
+	if (efi_sai_memmap_install(orig_new_phys, orig_num_entries)) {
 		pr_err("Could not install new original EFI memmap\n");
 		return;
 	}
@@ -1171,7 +1225,7 @@ void install_orig_memmap(void)
 
 void uninstall_orig_memmap(phys_addr_t addr, unsigned int nr_map)
 {
-	if (efi_memmap_install(addr, nr_map)) {
+	if (efi_sai_memmap_install(addr, nr_map)) {
 		pr_err("Could not install old EFI memmap\n");
 		return;
 	}
