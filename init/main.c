@@ -668,7 +668,7 @@ asmlinkage __visible void __init start_kernel(void)
 	}
 
 	ftrace_init();
-	virt_efi_sai_func();
+	//virt_efi_sai_func();
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();

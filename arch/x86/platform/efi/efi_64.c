@@ -465,6 +465,133 @@ void __init efi_dump_pagetable(void)
 #endif
 }
 
+static int __efi_sai_memmap_init(struct efi_memory_map_data *data, bool late)
+{
+	struct efi_memory_map map;
+	phys_addr_t phys_map;
+
+	if (efi_enabled(EFI_PARAVIRT))
+		return 0;
+
+	phys_map = data->phys_map;
+
+	map.map = memremap(phys_map, data->size, MEMREMAP_WB);
+
+	if (!map.map) {
+		pr_err("Could not map the memory map!\n");
+		return -ENOMEM;
+	}
+
+	map.phys_map = data->phys_map;
+	map.nr_map = data->size / data->desc_size;
+	map.map_end = map.map + data->size;
+
+	map.desc_version = data->desc_version;
+	map.desc_size = data->desc_size;
+	map.late = late;
+
+	set_bit(EFI_MEMMAP, &efi.flags);
+
+	efi.memmap = map;
+
+	return 0;
+}
+
+static void efi_sai_memmap_unmap(void)
+{
+	memunmap(efi.memmap.map);
+
+	efi.memmap.map = NULL;
+	clear_bit(EFI_MEMMAP, &efi.flags);
+}
+
+static int efi_sai_memmap_install(phys_addr_t addr, unsigned int nr_map)
+{
+	struct efi_memory_map_data data;
+
+	efi_sai_memmap_unmap();
+
+	data.phys_map = addr;
+	data.size = efi.memmap.desc_size * nr_map;
+	data.desc_version = efi.memmap.desc_version;
+	data.desc_size = efi.memmap.desc_size;
+
+	return __efi_sai_memmap_init(&data, efi.memmap.late);
+}
+
+void install_orig_memmap(void)
+{
+	if (efi_sai_memmap_install(orig_new_phys, orig_num_entries)) {
+		pr_err("Could not install new original EFI memmap\n");
+		return;
+	}
+}
+
+void uninstall_orig_memmap(phys_addr_t addr, unsigned int nr_map)
+{
+	if (efi_sai_memmap_install(addr, nr_map)) {
+		pr_err("Could not install old EFI memmap\n");
+		return;
+	}
+}
+
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+static int once = 0;
+int efi_boot_services_fixup(unsigned long phys_addr)
+{
+	int ret, num_entries;
+	unsigned long pfn;
+	efi_memory_desc_t md;
+	efi_memory_desc_t *md1;
+	phys_addr_t old_memmap_phys;
+	unsigned long pf = 0;
+	num_entries = 0;
+
+	pfn = phys_addr >> PAGE_SHIFT;
+	/* save already existing memory map */
+	old_memmap_phys = efi.memmap.phys_map;
+	for_each_efi_memory_desc(md1) {
+		num_entries++;
+	}
+
+	//print_memmap();
+
+	install_orig_memmap();
+
+	//print_memmap();
+
+	ret = efi_mem_desc_lookup(phys_addr, &md);
+
+	if (ret)
+		return 0;
+
+	if (md.type == EFI_BOOT_SERVICES_CODE ||
+	    md.type == EFI_BOOT_SERVICES_DATA)	{
+		/*
+		 * If the page fault was caused by an acccess to BOOT_SERVICES_*
+		 * memory regions, just map the region... and warn about it.
+		 * By now we should have found the virtual address of the system
+		 * table. Thus, no need to update.
+		 */
+		pr_warn(FW_BUG "Fixing illegal access to BOOT_SERVICES_* at PA: "
+			"0x%lx\n", phys_addr);
+		efi_map_region(&md);
+		if (once < 2) {
+			efi_map_region(&md);
+		}
+		else {
+			pf &= ~_PAGE_NX;
+			pf |= ~_PAGE_RW;
+			kernel_map_pages_in_pgd(efi_pgd, pfn, md.phys_addr, md.num_pages, pf);
+		}
+		uninstall_orig_memmap(old_memmap_phys, num_entries);
+		once++;
+		return 1;
+	}
+	return 0;
+}
+#endif
+
 #ifdef CONFIG_EFI_MIXED
 extern efi_status_t efi64_thunk(u32, ...);
 
