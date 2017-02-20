@@ -14,6 +14,7 @@
 #include <linux/prefetch.h>		/* prefetchw			*/
 #include <linux/context_tracking.h>	/* exception_enter(), ...	*/
 #include <linux/uaccess.h>		/* faulthandler_disabled()	*/
+#include <linux/efi.h>			/* fixup for buggy UEFI firmware*/
 
 #include <asm/cpufeature.h>		/* boot_cpu_has, ...		*/
 #include <asm/traps.h>			/* dotraplinkage, ...		*/
@@ -413,7 +414,7 @@ out:
 
 void vmalloc_sync_all(void)
 {
-	sync_global_pgds(VMALLOC_START & PGDIR_MASK, VMALLOC_END, 0);
+	sync_global_pgds(VMALLOC_START & PGDIR_MASK, VMALLOC_END);
 }
 
 /*
@@ -679,8 +680,7 @@ show_fault_oops(struct pt_regs *regs, unsigned long error_code,
 		printk(KERN_CONT "paging request");
 
 	printk(KERN_CONT " at %p\n", (void *) address);
-	printk(KERN_ALERT "IP:");
-	printk_address(regs->ip);
+	printk(KERN_ALERT "IP: %pS\n", (void *)regs->ip);
 
 	dump_pagetable(address);
 }
@@ -800,6 +800,13 @@ no_context(struct pt_regs *regs, unsigned long error_code,
 		return;
 
 	if (is_errata93(regs, address))
+		return;
+
+	/*
+	 * Try to fixup faults caused by illegal access to BOOT_SERVICES_*
+	 * regions by UEFI firmware.
+	 */
+	if (efi_boot_services_fixup(address))
 		return;
 
 	/*

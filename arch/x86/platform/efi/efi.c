@@ -55,6 +55,8 @@
 
 static struct efi efi_phys __initdata;
 static efi_system_table_t efi_systab __initdata;
+phys_addr_t orig_new_phys;
+int orig_num_entries = 0;
 
 static efi_config_table_type_t arch_tables[] __initdata = {
 #ifdef CONFIG_X86_UV
@@ -72,6 +74,57 @@ static int __init setup_add_efi_memmap(char *arg)
 	return 0;
 }
 early_param("add_efi_memmap", setup_add_efi_memmap);
+
+static void print_memmap(void)
+{
+	efi_memory_desc_t *md;
+	int i=0;
+
+	for_each_efi_memory_desc(md) {
+		pr_err("MD%d= Type: %x\tPhys_addr: 0x%llx\tVirt_addr: 0x%llx\tPages: %lld\tAttribute: 0x%llx\n", i, md->type, md->phys_addr, md->virt_addr, md->num_pages, md->attribute);
+		i++;
+	}
+}
+
+static void save_orig_memmap_forever(void)
+{
+	phys_addr_t new_phys, new_size;
+	efi_memory_desc_t *md;
+	int num_entries = 0;
+	void *new, *new_md;
+
+	for_each_efi_memory_desc(md) {
+		num_entries++;
+	}
+
+	new_size = efi.memmap.desc_size * num_entries;
+	new_phys = efi_memmap_alloc(num_entries);
+	if (!new_phys) {
+		pr_err("Failed to allocate new EFI memmap\n");
+		return;
+	}
+
+	new = memremap(new_phys, new_size, MEMREMAP_WB);
+	if (!new) {
+		pr_err("Failed to map new EFI memmap\n");
+		return;
+	}
+
+	/*
+	 * Build a new EFI memmap that has *all* entries of original memory
+	 * map, because we need these entries to dynamically fixup page
+	 * faults caused by illegal accesses from firmware.
+	 */
+	new_md = new;
+	for_each_efi_memory_desc(md) {
+		memcpy(new_md, md, efi.memmap.desc_size);
+		new_md += efi.memmap.desc_size;
+	}
+
+	memunmap(new);
+	orig_new_phys = new_phys;
+	orig_num_entries = num_entries;
+}
 
 static efi_status_t __init phys_efi_set_virtual_address_map(
 	unsigned long memory_map_size,
@@ -208,6 +261,70 @@ int __init efi_memblock_x86_reserve_range(void)
 	memblock_reserve(pmap, efi.memmap.nr_map * efi.memmap.desc_size);
 
 	return 0;
+}
+
+#define OVERFLOW_ADDR_SHIFT	(64 - EFI_PAGE_SHIFT)
+#define OVERFLOW_ADDR_MASK	(U64_MAX << OVERFLOW_ADDR_SHIFT)
+#define U64_HIGH_BIT		(~(U64_MAX >> 1))
+
+static bool __init efi_memmap_entry_valid(const efi_memory_desc_t *md, int i)
+{
+	u64 end = (md->num_pages << EFI_PAGE_SHIFT) + md->phys_addr - 1;
+	u64 end_hi = 0;
+	char buf[64];
+
+	if (md->num_pages == 0) {
+		end = 0;
+	} else if (md->num_pages > EFI_PAGES_MAX ||
+		   EFI_PAGES_MAX - md->num_pages <
+		   (md->phys_addr >> EFI_PAGE_SHIFT)) {
+		end_hi = (md->num_pages & OVERFLOW_ADDR_MASK)
+			>> OVERFLOW_ADDR_SHIFT;
+
+		if ((md->phys_addr & U64_HIGH_BIT) && !(end & U64_HIGH_BIT))
+			end_hi += 1;
+	} else {
+		return true;
+	}
+
+	pr_warn_once(FW_BUG "Invalid EFI memory map entries:\n");
+
+	if (end_hi) {
+		pr_warn("mem%02u: %s range=[0x%016llx-0x%llx%016llx] (invalid)\n",
+			i, efi_md_typeattr_format(buf, sizeof(buf), md),
+			md->phys_addr, end_hi, end);
+	} else {
+		pr_warn("mem%02u: %s range=[0x%016llx-0x%016llx] (invalid)\n",
+			i, efi_md_typeattr_format(buf, sizeof(buf), md),
+			md->phys_addr, end);
+	}
+	return false;
+}
+
+static void __init efi_clean_memmap(void)
+{
+	efi_memory_desc_t *out = efi.memmap.map;
+	const efi_memory_desc_t *in = out;
+	const efi_memory_desc_t *end = efi.memmap.map_end;
+	int i, n_removal;
+
+	for (i = n_removal = 0; in < end; i++) {
+		if (efi_memmap_entry_valid(in, i)) {
+			if (out != in)
+				memcpy(out, in, efi.memmap.desc_size);
+			out = (void *)out + efi.memmap.desc_size;
+		} else {
+			n_removal++;
+		}
+		in = (void *)in + efi.memmap.desc_size;
+	}
+
+	if (n_removal > 0) {
+		u64 size = efi.memmap.nr_map - n_removal;
+
+		pr_warn("Removing %d invalid memory map entries.\n", n_removal);
+		efi_memmap_install(efi.memmap.phys_map, size);
+	}
 }
 
 void __init efi_print_memmap(void)
@@ -472,6 +589,8 @@ void __init efi_init(void)
 		}
 	}
 
+	efi_clean_memmap();
+
 	if (efi_enabled(EFI_DBG))
 		efi_print_memmap();
 }
@@ -509,7 +628,7 @@ void __init runtime_code_page_mkexec(void)
 	}
 }
 
-void __init efi_memory_uc(u64 addr, unsigned long size)
+void __init_fixup efi_memory_uc(u64 addr, unsigned long size)
 {
 	unsigned long page_shift = 1UL << EFI_PAGE_SHIFT;
 	u64 npages;
@@ -519,7 +638,7 @@ void __init efi_memory_uc(u64 addr, unsigned long size)
 	set_memory_uc(addr, npages);
 }
 
-void __init old_map_region(efi_memory_desc_t *md)
+void __init_fixup old_map_region(efi_memory_desc_t *md)
 {
 	u64 start_pfn, end_pfn, end;
 	unsigned long size;
@@ -705,9 +824,13 @@ static bool should_map_region(efi_memory_desc_t *md)
 	/*
 	 * Map boot services regions as a workaround for buggy
 	 * firmware that accesses them even when they shouldn't.
+	 * (only if CONFIG_EFI_BOOT_SERVICES_WARN is disabled)
 	 *
 	 * See efi_{reserve,free}_boot_services().
 	 */
+	if (IS_ENABLED(CONFIG_EFI_BOOT_SERVICES_WARN))
+		return false;
+
 	if (md->type == EFI_BOOT_SERVICES_CODE ||
 	    md->type == EFI_BOOT_SERVICES_DATA)
 		return true;
@@ -879,6 +1002,9 @@ static void __init __efi_enter_virtual_mode(void)
 		return;
 	}
 
+	print_memmap();
+	save_orig_memmap_forever();
+
 	pa = __pa(new_memmap);
 
 	/*
@@ -994,3 +1120,44 @@ static int __init arch_parse_efi_cmdline(char *str)
 	return 0;
 }
 early_param("efi", arch_parse_efi_cmdline);
+
+__weak DEFINE_SPINLOCK(sai_lock);
+static DEFINE_SPINLOCK(efi_sai_lock);
+
+/*
+ * We don't need to trigger illegal access to boot regions that are not
+ * 1:1 mapped. E.g: some address like 0xfffffffefe3be000.
+ * This is the VA assigned to one of boot time memory descriptor (I
+ * found it by printing memory map). With "boot services warn" patches
+ * we will not be having these addresses anymore, because kernel will
+ * not map boot time regions and hence firmware wouldn't being have any
+ * idea of those virtual addresses. Hence we will not see accesses from
+ * firmware to those virtual addresses.
+ */
+void virt_efi_sai_func(void)
+{
+	unsigned long flags, flags1;
+	unsigned long *addr_pa = (unsigned long *)0x7bfbe000;
+
+	spin_lock_irqsave(&sai_lock, flags1);
+	spin_lock(&efi_sai_lock);
+
+	efi_sync_low_kernel_mappings();
+	local_irq_save(flags);
+
+	efi_scratch.prev_cr3 = read_cr3();
+	write_cr3((unsigned long)efi_scratch.efi_pgt);
+	__flush_tlb_all();
+
+	*addr_pa = 1;
+
+	write_cr3(efi_scratch.prev_cr3);
+	__flush_tlb_all();
+	local_irq_restore(flags);
+
+	spin_unlock(&efi_sai_lock);
+	spin_unlock_irqrestore(&sai_lock, flags1);
+
+	return;
+}
+
