@@ -495,3 +495,61 @@ bool efi_poweroff_required(void)
 {
 	return acpi_gbl_reduced_hardware || acpi_no_s5;
 }
+
+__weak DEFINE_SPINLOCK(sai_lock);
+static DEFINE_SPINLOCK(efi_sai_lock);
+
+/*
+ * This function assumes that it will be used *only* to dump contents of
+ * efi regions, specifically efi_boot time regions, hence it embeds code
+ * to change CR3 to efi_pgd.
+ */
+void efi_hexdump(unsigned char *buf, int num_pages)
+{
+	unsigned long flags, flags1;
+	int i, j, len;
+
+	/* Switch to efi_pgd */
+	spin_lock_irqsave(&sai_lock, flags1);
+	spin_lock(&efi_sai_lock);
+
+	efi_sync_low_kernel_mappings();
+	local_irq_save(flags);
+
+	efi_scratch.prev_cr3 = read_cr3();
+	write_cr3((unsigned long)efi_scratch.efi_pgt);
+	__flush_tlb_all();
+
+	/* Hex dump */
+	len = num_pages * 4 * 1024;
+
+	for (i = 0; i < len; i += 16) {
+		if (i % 16 == 0)
+		   printk("\n%04x:", i);
+
+		for (j = 0; j < 16; j++) {
+		   if ((i + j) < len)
+			printk("%02x ", buf[i + j]);
+		   else
+			printk("   ");
+		}
+	}
+
+	write_cr3(efi_scratch.prev_cr3);
+	__flush_tlb_all();
+	local_irq_restore(flags);
+
+	spin_unlock(&efi_sai_lock);
+	spin_unlock_irqrestore(&sai_lock, flags1);
+
+	return;
+}
+
+int efi_trigger_rt_illegal_access_func(struct ctl_table *table, int write, void __user *buffer, size_t *length, loff_t *ppos)
+{
+	pr_err("Trigger illegal access of boot time region after kernel booted\n");
+	virt_efi_sai_func(0x7e9fe000);
+	pr_err("After calling efi_free_boot_services()\n");
+	efi_hexdump((unsigned char *)0x7bfbe000, 3);
+	return 0;
+}

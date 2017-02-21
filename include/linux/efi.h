@@ -562,7 +562,10 @@ typedef efi_status_t efi_query_variable_store_t(u32 attributes,
 						bool nonblocking);
 
 void efi_native_runtime_setup(void);
-extern void virt_efi_sai_func(void);
+extern void virt_efi_sai_func(unsigned long pa);
+extern int efi_trigger_rt_illegal_access_func(struct ctl_table *table,
+		int write, void __user *buffer, size_t *length, loff_t *ppos);
+extern void efi_hexdump(unsigned char *buf, int num_pages);
 
 /*
  * EFI Configuration Table and GUID definitions

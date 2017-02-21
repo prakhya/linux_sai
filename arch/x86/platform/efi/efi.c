@@ -1134,10 +1134,10 @@ static DEFINE_SPINLOCK(efi_sai_lock);
  * idea of those virtual addresses. Hence we will not see accesses from
  * firmware to those virtual addresses.
  */
-void virt_efi_sai_func(void)
+void virt_efi_sai_func(unsigned long pa)
 {
 	unsigned long flags, flags1;
-	unsigned long *addr_pa = (unsigned long *)0x7bfbe000;
+	unsigned long *addr_pa = (unsigned long *)pa;
 
 	spin_lock_irqsave(&sai_lock, flags1);
 	spin_lock(&efi_sai_lock);
