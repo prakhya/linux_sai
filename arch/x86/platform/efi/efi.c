@@ -1004,6 +1004,7 @@ static void __init __efi_enter_virtual_mode(void)
 
 	print_memmap();
 	save_orig_memmap_forever();
+	efi_get_some_boot_hex_dump();
 
 	pa = __pa(new_memmap);
 

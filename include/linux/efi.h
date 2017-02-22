@@ -565,7 +565,10 @@ void efi_native_runtime_setup(void);
 extern void virt_efi_sai_func(unsigned long pa);
 extern int efi_trigger_rt_illegal_access_func(struct ctl_table *table,
 		int write, void __user *buffer, size_t *length, loff_t *ppos);
-extern void efi_hexdump(unsigned char *buf, int num_pages);
+extern void efi_hexdump1(unsigned char *buf, int num_pages);
+extern void efi_hexdump2(unsigned char *buf, int num_pages);
+extern void efi_get_some_boot_hex_dump(void);
+extern void efi_get_some_boot_hex_dump1(void);
 
 /*
  * EFI Configuration Table and GUID definitions

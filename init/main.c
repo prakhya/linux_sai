@@ -634,8 +634,9 @@ asmlinkage __visible void __init start_kernel(void)
 	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_enter_virtual_mode();
 #endif
+	efi_get_some_boot_hex_dump1();
 	pr_err("Before calling efi_free_boot_services()\n");
-	efi_hexdump((unsigned char *)0x7bfbe000, 3);
+	efi_hexdump1((unsigned char *)0x7ea02000, 5);
 #ifdef CONFIG_X86_ESPFIX64
 	/* Should be run before the first non-init thread is created */
 	init_espfix_bsp();
@@ -672,7 +673,7 @@ asmlinkage __visible void __init start_kernel(void)
 	ftrace_init();
 	virt_efi_sai_func(0x7bfbe000);
 	pr_err("After calling efi_free_boot_services()\n");
-	efi_hexdump((unsigned char *)0x7bfbe000, 3);
+	efi_hexdump1((unsigned char *)0x7ea02000, 5);
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();

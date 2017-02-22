@@ -495,10 +495,11 @@ void __init efi_runtime_update_mappings(void)
 	}
 }
 
-void __init efi_dump_pagetable(void)
+void efi_dump_pagetable(void)
 {
 #ifdef CONFIG_EFI_PGT_DUMP
 	ptdump_walk_pgd_level(NULL, efi_pgd);
+	//ptdump_walk_pgd_level(NULL, swapper_pg_dir);
 #endif
 }
 
@@ -628,6 +629,25 @@ int efi_boot_services_fixup(unsigned long phys_addr)
 	return 0;
 }
 #endif
+
+void efi_get_some_boot_hex_dump()
+{
+	unsigned long pfn, flags;
+	//unsigned long *pa = (unsigned long*)0x7bfbe000;
+
+	flags = _PAGE_RW | _PAGE_NX;
+	pfn = 0x7bfbe000 >> PAGE_SHIFT;
+	kernel_map_pages_in_pgd(efi_pgd, pfn, 0x7bfbe000, 32, flags);
+	efi_dump_pagetable();
+}
+
+void efi_get_some_boot_hex_dump1()
+{
+	efi_hexdump1((unsigned char *)0x7bfbe000, 5);
+
+	unmap_pud_range(efi_pgd, 0x7bfbe000, 0x7bfde000);
+	efi_dump_pagetable();
+}
 
 #ifdef CONFIG_EFI_MIXED
 extern efi_status_t efi64_thunk(u32, ...);
