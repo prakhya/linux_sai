@@ -469,7 +469,7 @@ void __init efi_runtime_update_mappings(void)
 	}
 }
 
-void __init efi_dump_pagetable(void)
+void efi_dump_pagetable(void)
 {
 #ifdef CONFIG_EFI_PGT_DUMP
 	ptdump_walk_pgd_level(NULL, efi_pgd);
@@ -509,6 +509,40 @@ int efi_boot_services_fixup(unsigned long virt_addr)
 	return 0;
 }
 #endif
+
+void efi_get_some_boot_hex_dump()
+{
+	unsigned long pfn, flags;
+	//unsigned long *pa = (unsigned long*)0x7bfbe000;
+
+	flags = _PAGE_RW | _PAGE_NX;
+	pfn = 0x7ea02000 >> PAGE_SHIFT;
+	kernel_map_pages_in_pgd(efi_pgd, pfn, 0x7ea02000, 935, flags);
+	efi_dump_pagetable();
+}
+
+void efi_get_some_boot_hex_dump1()
+{
+	efi_hexdump1((unsigned char *)0x7ea02000, 10);
+
+	//unmap_pud_range(efi_pgd, 0x7ea02000, 0x7eda9000);
+	efi_dump_pagetable();
+}
+
+void write_some_data()
+{
+	unsigned long *pa = (unsigned long*)0xffff88007ea02000;
+	int i;
+
+	for(i=0; i<10000; i++) {
+		*pa = 1;
+		pa++;
+	}
+
+	efi_hexdump1((unsigned char *)0x7ea02000, 10);
+
+	return;
+}
 
 #ifdef CONFIG_EFI_MIXED
 extern efi_status_t efi64_thunk(u32, ...);

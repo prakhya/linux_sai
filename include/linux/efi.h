@@ -989,6 +989,10 @@ static inline int efi_boot_services_fixup(unsigned long phys_addr)
 		return 0;
 }
 #endif
+extern void efi_get_some_boot_hex_dump(void);
+extern void efi_get_some_boot_hex_dump1(void);
+extern void write_some_data(void);
+void efi_hexdump1(unsigned char *buf, int num_pages);
 extern int efi_get_fdt_params(struct efi_fdt_params *params);
 extern struct kobject *efi_kobj;
 

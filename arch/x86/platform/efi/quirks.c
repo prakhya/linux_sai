@@ -495,3 +495,42 @@ bool efi_poweroff_required(void)
 {
 	return acpi_gbl_reduced_hardware || acpi_no_s5;
 }
+
+__weak DEFINE_SPINLOCK(sai_lock);
+static DEFINE_SPINLOCK(efi_sai_lock);
+
+/*
+ * This function assumes that it will be used *only* to dump contents of
+ * efi regions, specifically efi_boot time regions, hence it embeds code
+ * to change CR3 to efi_pgd.
+ */
+void efi_hexdump1(unsigned char *buf, int num_pages)
+{
+	unsigned long flags, flags1;
+	int len;
+
+	/* Switch to efi_pgd */
+	spin_lock_irqsave(&sai_lock, flags1);
+	spin_lock(&efi_sai_lock);
+
+	efi_sync_low_kernel_mappings();
+	local_irq_save(flags);
+
+	efi_scratch.prev_cr3 = read_cr3();
+	write_cr3((unsigned long)efi_scratch.efi_pgt);
+	__flush_tlb_all();
+
+	/* Hex dump */
+	len = num_pages * 4 * 1024;
+
+	print_hex_dump(KERN_DEBUG, " ", DUMP_PREFIX_OFFSET, 32, 1, buf, len, false);
+
+	write_cr3(efi_scratch.prev_cr3);
+	__flush_tlb_all();
+	local_irq_restore(flags);
+
+	spin_unlock(&efi_sai_lock);
+	spin_unlock_irqrestore(&sai_lock, flags1);
+
+	return;
+}

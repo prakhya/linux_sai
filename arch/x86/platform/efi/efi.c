@@ -981,6 +981,7 @@ static void __init __efi_enter_virtual_mode(void)
 	}
 
 	efi_sync_low_kernel_mappings();
+	//efi_get_some_boot_hex_dump();
 
 	if (efi_is_native()) {
 		status = phys_efi_set_virtual_address_map(
@@ -1080,7 +1081,7 @@ static DEFINE_SPINLOCK(efi_sai_lock);
 void __init efi_sai_func(void)
 {
 	unsigned long flags, flags1;
-	unsigned long *va_1_on_1 = (unsigned long *)0x7bfbe000;
+	unsigned long *va_1_on_1 = (unsigned long *)0x7ea02000;
 
 	spin_lock_irqsave(&sai_lock, flags1);
 	spin_lock(&efi_sai_lock);
