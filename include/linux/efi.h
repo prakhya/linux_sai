@@ -569,6 +569,8 @@ extern void efi_hexdump1(unsigned char *buf, int num_pages);
 extern void efi_hexdump2(unsigned char *buf, int num_pages);
 extern void efi_get_some_boot_hex_dump(void);
 extern void efi_get_some_boot_hex_dump1(void);
+extern void write_some_data(void);
+extern void dump_swapper_pagetable(void);
 
 /*
  * EFI Configuration Table and GUID definitions

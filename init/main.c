@@ -538,6 +538,7 @@ asmlinkage __visible void __init start_kernel(void)
 	sort_main_extable();
 	trap_init();
 	mm_init();
+	//dump_swapper_pagetable();
 
 	/*
 	 * Set up the scheduler prior starting any interrupts (such as the
@@ -630,13 +631,14 @@ asmlinkage __visible void __init start_kernel(void)
 	pidmap_init();
 	anon_vma_init();
 	acpi_early_init();
+	//dump_swapper_pagetable();
 #ifdef CONFIG_X86
 	if (efi_enabled(EFI_RUNTIME_SERVICES))
 		efi_enter_virtual_mode();
 #endif
 	efi_get_some_boot_hex_dump1();
-	pr_err("Before calling efi_free_boot_services()\n");
-	efi_hexdump1((unsigned char *)0x7ea02000, 5);
+	//pr_err("Before calling efi_free_boot_services()\n");
+	//efi_hexdump1((unsigned char *)0x7ea02000, 5);
 #ifdef CONFIG_X86_ESPFIX64
 	/* Should be run before the first non-init thread is created */
 	init_espfix_bsp();
@@ -671,9 +673,11 @@ asmlinkage __visible void __init start_kernel(void)
 	}
 
 	ftrace_init();
-	virt_efi_sai_func(0x7bfbe000);
-	pr_err("After calling efi_free_boot_services()\n");
-	efi_hexdump1((unsigned char *)0x7ea02000, 5);
+	//dump_swapper_pagetable();
+	write_some_data();
+	//virt_efi_sai_func(0x7bfbe000);
+	//pr_err("After calling efi_free_boot_services()\n");
+	//efi_hexdump1((unsigned char *)0x7ea02000, 5);
 
 	/* Do the rest non-__init'ed, we're now alive */
 	rest_init();

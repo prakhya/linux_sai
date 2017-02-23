@@ -593,9 +593,9 @@ void efi_hexdump2(unsigned char *buf, int num_pages)
 int efi_trigger_rt_illegal_access_func(struct ctl_table *table, int write, void __user *buffer, size_t *length, loff_t *ppos)
 {
 	pr_err("Trigger illegal access of boot time region after kernel booted\n");
-	virt_efi_sai_func(0x7ea02000);
+	virt_efi_sai_func(0x7bfbe000);
 	pr_err("After calling efi_free_boot_services()\n");
 	//efi_hexdump((unsigned char *)0x7bfbe000, 3);
-	efi_hexdump1((unsigned char *)0x7bfbe000, 3);
+	efi_hexdump1((unsigned char *)0x7ea02000, 10);
 	return 0;
 }
