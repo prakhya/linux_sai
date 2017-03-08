@@ -378,6 +378,12 @@ int __init_fixup efi_mem_desc_lookup(u64 phys_addr, efi_memory_desc_t *out_md)
 
 		if (!(md->attribute & EFI_MEMORY_RUNTIME) &&
 		    md->type != EFI_BOOT_SERVICES_DATA &&
+#if defined(CONFIG_EFI_BOOT_SERVICES_WARN)
+		    md->type != EFI_BOOT_SERVICES_CODE &&
+		    md->type != EFI_CONVENTIONAL_MEMORY &&
+		    md->type != EFI_LOADER_CODE &&
+		    md->type != EFI_LOADER_DATA &&
+#endif
 		    md->type != EFI_RUNTIME_SERVICES_DATA) {
 			continue;
 		}
