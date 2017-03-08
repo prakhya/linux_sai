@@ -339,3 +339,119 @@ void __init efi_memmap_insert(struct efi_memory_map *old_memmap, void *buf,
 		}
 	}
 }
+
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+
+phys_addr_t orig_new_phys = 0x0;
+int orig_num_entries = 0;
+
+static int __efi_sai_memmap_init(struct efi_memory_map_data *data, bool late)
+{
+	struct efi_memory_map map;
+	phys_addr_t phys_map;
+
+	if (efi_enabled(EFI_PARAVIRT))
+		return 0;
+
+	phys_map = data->phys_map;
+
+	map.map = memremap(phys_map, data->size, MEMREMAP_WB);
+
+	if (!map.map) {
+		pr_err("Could not map the memory map!\n");
+		return -ENOMEM;
+	}
+
+	map.phys_map = data->phys_map;
+	map.nr_map = data->size / data->desc_size;
+	map.map_end = map.map + data->size;
+
+	map.desc_version = data->desc_version;
+	map.desc_size = data->desc_size;
+	map.late = late;
+
+	set_bit(EFI_MEMMAP, &efi.flags);
+
+	efi.memmap = map;
+
+	return 0;
+}
+
+static void efi_sai_memmap_unmap(void)
+{
+	memunmap(efi.memmap.map);
+
+	efi.memmap.map = NULL;
+	clear_bit(EFI_MEMMAP, &efi.flags);
+}
+
+static int efi_sai_memmap_install(phys_addr_t addr, unsigned int nr_map)
+{
+	struct efi_memory_map_data data;
+
+	efi_sai_memmap_unmap();
+
+	data.phys_map = addr;
+	data.size = efi.memmap.desc_size * nr_map;
+	data.desc_version = efi.memmap.desc_version;
+	data.desc_size = efi.memmap.desc_size;
+
+	return __efi_sai_memmap_init(&data, efi.memmap.late);
+}
+
+void install_orig_memmap(void)
+{
+	if (efi_sai_memmap_install(orig_new_phys, orig_num_entries)) {
+		pr_err("Could not install new original EFI memmap\n");
+		return;
+	}
+}
+
+void uninstall_orig_memmap(phys_addr_t addr, unsigned int nr_map)
+{
+	if (efi_sai_memmap_install(addr, nr_map)) {
+		pr_err("Could not install old EFI memmap\n");
+		return;
+	}
+}
+
+void __init save_orig_memmap_forever(void)
+{
+	phys_addr_t new_phys, new_size;
+	efi_memory_desc_t *md;
+	int num_entries = 0;
+	void *new, *new_md;
+
+	for_each_efi_memory_desc(md) {
+		num_entries++;
+	}
+
+	new_size = efi.memmap.desc_size * num_entries;
+	new_phys = efi_memmap_alloc(num_entries);
+	if (!new_phys) {
+		pr_err("Failed to allocate new EFI memmap\n");
+		return;
+	}
+
+	new = memremap(new_phys, new_size, MEMREMAP_WB);
+	if (!new) {
+		pr_err("Failed to map new EFI memmap\n");
+		return;
+	}
+
+	/*
+	 * Build a new EFI memmap that has *all* entries of original memory
+	 * map, because we need these entries to dynamically fixup page
+	 * faults caused by illegal accesses from firmware.
+	 */
+	new_md = new;
+	for_each_efi_memory_desc(md) {
+		memcpy(new_md, md, efi.memmap.desc_size);
+		new_md += efi.memmap.desc_size;
+	}
+
+	memunmap(new);
+	orig_new_phys = new_phys;
+	orig_num_entries = num_entries;
+}
+#endif
