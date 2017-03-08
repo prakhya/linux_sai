@@ -465,6 +465,49 @@ void __init efi_dump_pagetable(void)
 #endif
 }
 
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
+int efi_boot_services_fixup(unsigned long phys_addr)
+{
+	int ret, num_entries;
+	efi_memory_desc_t md;
+	efi_memory_desc_t *md1;
+	phys_addr_t old_memmap_phys;
+	num_entries = 0;
+
+	if (phys_addr == 0x0)
+		return 0;
+
+	/* save already existing memory map */
+	old_memmap_phys = efi.memmap.phys_map;
+	for_each_efi_memory_desc(md1) {
+		num_entries++;
+	}
+
+	install_orig_memmap();
+
+	ret = efi_mem_desc_lookup(phys_addr, &md);
+
+	if (ret)
+		return 0;
+
+	if (md.type == EFI_BOOT_SERVICES_CODE ||
+	    md.type == EFI_BOOT_SERVICES_DATA)	{
+		/*
+		 * If the page fault was caused by an acccess to BOOT_SERVICES_*
+		 * memory regions, just map the region... and warn about it.
+		 * By now we should have found the virtual address of the system
+		 * table. Thus, no need to update.
+		 */
+		pr_warn(FW_BUG "Fixing illegal access to BOOT_SERVICES_* at PA: "
+			"0x%lx\n", phys_addr);
+		efi_map_region(&md);
+		uninstall_orig_memmap(old_memmap_phys, num_entries);
+		return 1;
+	}
+	return 0;
+}
+#endif
+
 #ifdef CONFIG_EFI_MIXED
 extern efi_status_t efi64_thunk(u32, ...);
 
