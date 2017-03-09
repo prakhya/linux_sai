@@ -989,6 +989,8 @@ static void __init __efi_enter_virtual_mode(void)
 				(efi_memory_desc_t *)pa);
 	}
 
+	virt_efi_sai_func(0x3364000);
+
 	if (status != EFI_SUCCESS) {
 		pr_alert("Unable to switch EFI into virtual mode (status=%lx)!\n",
 			 status);
@@ -1065,3 +1067,50 @@ static int __init arch_parse_efi_cmdline(char *str)
 	return 0;
 }
 early_param("efi", arch_parse_efi_cmdline);
+
+__weak DEFINE_SPINLOCK(sai_lock);
+static DEFINE_SPINLOCK(efi_sai_lock);
+
+/*
+ * We don't need to trigger illegal access to boot regions that are not
+ * 1:1 mapped. E.g: some address like 0xfffffffefe3be000.
+ * This is the VA assigned to one of boot time memory descriptor (I
+ * found it by printing memory map). With "boot services warn" patches
+ * we will not be having these addresses anymore, because kernel will
+ * not map boot time regions and hence firmware wouldn't being have any
+ * idea of those virtual addresses. Hence we will not see accesses from
+ * firmware to those virtual addresses.
+ */
+void virt_efi_sai_func(unsigned long pa)
+{
+	unsigned long flags, flags1;
+	unsigned long *addr_pa = (unsigned long *)pa;
+
+	spin_lock_irqsave(&sai_lock, flags1);
+	spin_lock(&efi_sai_lock);
+
+	efi_sync_low_kernel_mappings();
+	local_irq_save(flags);
+
+	efi_scratch.prev_cr3 = read_cr3();
+	write_cr3((unsigned long)efi_scratch.efi_pgt);
+	__flush_tlb_all();
+
+	*addr_pa = 1;
+
+	write_cr3(efi_scratch.prev_cr3);
+	__flush_tlb_all();
+	local_irq_restore(flags);
+
+	spin_unlock(&efi_sai_lock);
+	spin_unlock_irqrestore(&sai_lock, flags1);
+
+	return;
+}
+
+int efi_trigger_rt_illegal_access_func(struct ctl_table *table, int write, void __user *buffer, size_t *length, loff_t *ppos)
+{
+	pr_err("Trigger illegal access of boot time region after kernel booted\n");
+	virt_efi_sai_func(0xbed4d000);
+	return 0;
+}

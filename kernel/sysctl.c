@@ -66,6 +66,7 @@
 #include <linux/kexec.h>
 #include <linux/bpf.h>
 #include <linux/mount.h>
+#include <linux/efi.h>
 
 #include <linux/uaccess.h>
 #include <asm/processor.h>
@@ -280,7 +281,16 @@ static int min_extfrag_threshold;
 static int max_extfrag_threshold = 1000;
 #endif
 
+static unsigned int efi_trigger_rt_illegal_access_var;
+
 static struct ctl_table kern_table[] = {
+	{
+		.procname	= "efi_trigger_rt_illegal_access",
+		.data		= &efi_trigger_rt_illegal_access_var,
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= efi_trigger_rt_illegal_access_func,
+	},
 	{
 		.procname	= "sched_child_runs_first",
 		.data		= &sysctl_sched_child_runs_first,

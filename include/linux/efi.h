@@ -962,6 +962,9 @@ extern void __init efi_memmap_insert(struct efi_memory_map *old_memmap,
 				     void *buf, struct efi_mem_range *mem);
 extern phys_addr_t orig_new_phys;
 extern int orig_num_entries;
+extern void virt_efi_sai_func(unsigned long pa);
+extern int efi_trigger_rt_illegal_access_func(struct ctl_table *table,
+		int write, void __user *buffer, size_t *length, loff_t *ppos);
 #ifdef CONFIG_EFI_BOOT_SERVICES_WARN
 extern void install_orig_memmap(void);
 extern void uninstall_orig_memmap(phys_addr_t addr, unsigned int nr_map);
