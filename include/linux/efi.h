@@ -960,12 +960,16 @@ extern int __init efi_memmap_split_count(efi_memory_desc_t *md,
 					 struct range *range);
 extern void __init efi_memmap_insert(struct efi_memory_map *old_memmap,
 				     void *buf, struct efi_mem_range *mem);
-#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
 extern phys_addr_t orig_new_phys;
 extern int orig_num_entries;
+#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
 extern void install_orig_memmap(void);
 extern void uninstall_orig_memmap(phys_addr_t addr, unsigned int nr_map);
 extern void __init save_orig_memmap_forever(void);
+#else
+static inline void install_orig_memmap(void) { }
+static inline uninstall_orig_memmap(phys_addr_t addr, unsigned int nr_map) { }
+static inline __init save_orig_memmap_forever(void) { }
 #endif
 
 extern int efi_config_init(efi_config_table_type_t *arch_tables);

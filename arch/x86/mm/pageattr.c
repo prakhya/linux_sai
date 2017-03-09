@@ -868,7 +868,7 @@ static void unmap_pud_range(pgd_t *pgd, unsigned long start, unsigned long end)
 
 static int alloc_pte_page(pmd_t *pmd)
 {
-	pte_t *pte = (pte_t *)get_zeroed_page(GFP_KERNEL | __GFP_NOTRACK);
+	pte_t *pte = (pte_t *)get_zeroed_page(GFP_ATOMIC | __GFP_NOTRACK);
 	if (!pte)
 		return -1;
 

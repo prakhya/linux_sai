@@ -12,6 +12,9 @@
 #include <linux/memblock.h>
 #include <linux/slab.h>
 
+phys_addr_t orig_new_phys = 0x0;
+int orig_num_entries = 0;
+
 static phys_addr_t __init __efi_memmap_alloc_early(unsigned long size)
 {
 	return memblock_alloc(size, 0);
@@ -340,11 +343,6 @@ void __init efi_memmap_insert(struct efi_memory_map *old_memmap, void *buf,
 	}
 }
 
-#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
-
-phys_addr_t orig_new_phys = 0x0;
-int orig_num_entries = 0;
-
 static int __efi_sai_memmap_init(struct efi_memory_map_data *data, bool late)
 {
 	struct efi_memory_map map;
@@ -454,4 +452,3 @@ void __init save_orig_memmap_forever(void)
 	orig_new_phys = new_phys;
 	orig_num_entries = num_entries;
 }
-#endif

@@ -465,7 +465,6 @@ void __init efi_dump_pagetable(void)
 #endif
 }
 
-#ifdef CONFIG_EFI_BOOT_SERVICES_WARN
 int efi_boot_services_fixup(unsigned long phys_addr)
 {
 	int ret, num_entries;
@@ -488,10 +487,13 @@ int efi_boot_services_fixup(unsigned long phys_addr)
 	ret = efi_mem_desc_lookup(phys_addr, &md);
 
 	if (ret)
-		return 0;
+		goto unmap;
 
 	if (md.type == EFI_BOOT_SERVICES_CODE ||
-	    md.type == EFI_BOOT_SERVICES_DATA)	{
+	    md.type == EFI_BOOT_SERVICES_DATA ||
+	    md.type == EFI_CONVENTIONAL_MEMORY ||
+	    md.type == EFI_LOADER_CODE ||
+	    md.type == EFI_LOADER_DATA)	{
 		/*
 		 * If the page fault was caused by an acccess to BOOT_SERVICES_*
 		 * memory regions, just map the region... and warn about it.
@@ -504,9 +506,11 @@ int efi_boot_services_fixup(unsigned long phys_addr)
 		uninstall_orig_memmap(old_memmap_phys, num_entries);
 		return 1;
 	}
+
+unmap:
+	uninstall_orig_memmap(old_memmap_phys, num_entries);
 	return 0;
 }
-#endif
 
 #ifdef CONFIG_EFI_MIXED
 extern efi_status_t efi64_thunk(u32, ...);
